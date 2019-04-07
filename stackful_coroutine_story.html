@@ -65,7 +65,6 @@
 					* Coroutine Cancellation
 					* Deal with contentions
 					* join! and select!
-					* Result and performance
 					* Difference with Futures
 				</script>
 			</section>
@@ -76,7 +75,7 @@
 						## Stackful Generator
 						
 						* generator is a special function with multiple return values
-						* `send`/`yeild` would swich stack context 
+						* `send`/`yield` would switch stack context 
 							```rust
 							let mut g = Gn::new_scoped(|mut s| {
 								s.yield_(17); //--> `yield` switch stack to caller
@@ -87,25 +86,25 @@
 							g.for_each(|v| println!("{}", v); // print 17 and 42
 							```
 						Notes:
-						compared with stack frame in normal funciton calls
+						compared with stack frame in normal function calls
 					</script>
 				</section>
 				<section data-markdown>
 					<script type="text/template">
-						## Context managment
+						## Context management
 						* thread local context stack and chain generators
 						<div style="text-align: center;"><img src="images/context_stack_gen.png" style="background:none; border:none; box-shadow:none;"></div>
-						Note: the root contains no stack but only regs
+						Note: the root contains no stack but only registers
 					</script>
 				</section>
 
 				<section data-markdown>
 					<script type="text/template">
-						## key features
+						## stackful generator key features
 						* detect current context type
 						* `send` and `yield` with parameters
 						* yield internal stack refs
-						* always yiled to caller
+						* always yield to caller
 					</script>
 				</section>
 			</section>
@@ -125,8 +124,8 @@
 					<script type="text/template">
 						## Difference with generator
 						* coroutine is a special generator
-						* stackful coroutine can yeild from any point directly to scheduler
-						* always yeild a "kernal request"
+						* stackful coroutine can yield from any point directly to scheduler
+						* always yield a "kernel request"
 						* when resume the scheduler send back the result
 						* init with Coroutine Local Storage
 
@@ -149,15 +148,15 @@
 						```
 						* the kernel request
 						```rust
-						// APIs running after yeild to scheduler
+						// APIs running after yield to scheduler
 						pub trait EventSource {
-							/// kernel handler of the event
+							/// kernel handler of the event, got the coroutine instance back
 							fn subscribe(&mut self, _c: CoroutineImpl);
 							/// after yield back process
 							fn yield_back(&self, cancel: &'static Cancel) {}
 						}
 						```
-						* construct the kenel request on stack and yiled out
+						* construct the kernel request on stack and yield out
 					</script>
 				</section>
 
@@ -220,7 +219,7 @@
 					<script type="text/template">
 						## the eventloop
 						* uniform io event loop (epoll/kqueue/IOCP)
-						* event mode: do the real io operation in user sapce after resume back
+						* event mode: do the real io operation in user space after resume back
 						* completion mode: check the io result after resume back
 						* dispatch the io request on multiple io thread based on fd
 						* io timeout is managed in the eventloop thread
@@ -229,11 +228,172 @@
 				</section>
 			</section>
 
-			<section style="text-align: left;">
+			<section>
+				<section data-markdown>
+					<script type="text/template">
+						## sync primitive sub system
+						* yield blocker kernel request
+						* save the suspending coroutines within primitive internal queue
+						* scheduling the coroutines on normal scheduler with work stealing
+						* support Semphore/Mutex/RwLock/CondVar/SyncFlag/MPSC channel
+						Note: SyncFlag is something like Once
+					</script>
+				</section>
+				<section data-markdown>
+					<script type="text/template">
+						## the blocker
+						* all sync primitives are implemented based on blocker
+						* the blocker could return Timeout/Canceled/Ok
+						* the blocker support running in thread context
+
+						```rust
+						pub enum Parker { Coroutine(Park), Thread(ThreadPark) }
+						pub enum ParkError { Canceled, Timeout }
+						pub struct Blocker { parker: Parker }
+						
+						impl Blocker {
+							pub fn park(&self, timeout: Option<Duration>) -> Result<(), ParkError> {...}
+							pub fn unpark(&self) {...}
+						}
+						```
+						Note: the primitives can be cancelled
+					</script>
+				</section>
+			</section>
+
+			<section>
+				<section data-markdown>
+					<script type="text/template">
+						## timer management
+						* running timer manager in a separate thread
+						* the timer request push to MPSC "priority queue"
+						* blocker/sleep would push timeout request to the priority queue
+						* when a timeout happened, throw the coroutine into global ready list
+					</script>
+				</section>
+			</section>
+
+			<section>
+				<section data-markdown>
+					<script type="text/template">
+						## coroutine cancellation
+						* we trigger a special panic while detect cancel
+						* the cancel panic would be caught and we have chance to mark the coroutine as cancelled
+						* can only detect cancel when switch from/to kernel
+						* the cancel panic would trigger stack unwind and may has bad side effect
+						```rust
+						let j = go!(move || {
+							coroutine::sleep(Duration::from_secs(1000000);
+						});
+						unsafe { j.coroutine().cancel() };
+						assert!(j.joint().is_err()); // Err(Cancel)
+						```
+					</script>
+				</section>
+			</section>
+
+			<section>
+				<section data-markdown>
+					<script type="text/template">
+						## Deal with contentions
+						* user space and kernel space contention
+							- sub system may run the coroutine while it's still in kernel processing
+						* sub system contentions
+							- io and cancel
+							- blocker timeout
+							- blocker cancel
+						* sync primitive contentions
+					</script>
+				</section>
+				<section data-markdown>
+					<script type="text/template">
+						## the solutions
+						* user space and kernel space contention
+							- Delay drop kernel request until the kernel `subscribe()` done
+						* use lockless data structures
+							- AtomicOption - only one sub system can grab the coroutine
+							- atomic queues - Mutex/Semphore queue
+						* atomic event exchange algorithm
+							- make sure event processed once and only once between event consumer and producer
+					</script>
+				</section>
+			</section>
+
+			<section>
+				<section data-markdown>
+					<script type="text/template">
+						## uniform thread and coroutine
+						* we can detect the context when calling blocking API
+							 - if current context is thread root
+							 - if current context has coroutine local storage
+						* when we are calling blocking API in thread context it has the same effect as calling corresponding std API
+					</script>
+				</section>
+			</section>
+
+			<section>
+				<section data-markdown>
+					<script type="text/template">
+						## combine blocking logic
+						* `join!()` macro wait all things done
+						```rust
+						// ref scoped coroutines
+						join!(
+							rx1.recv().unwrap(),
+							mutex1.lock().unwrap(),
+						);
+						```
+						* `select!()` macro wait any thing done first and cancel others
+						```rust
+						// ref cqueue APIs
+						let n = select!(
+							x = rx1.recv().unwrap() => println!("got x={} first", x),
+							y = rx2.recv().unwrap() => println!("got y={} first", y),
+							_ = sleep(Duration::from_secs(1)) => println!("timeout!"),
+						);
+						```
+					</script>
+				</section>
+			</section>
+
+			<section>
+				<section data-markdown>
+					<script type="text/template">
+						## difference with futures
+						* The Good
+						    - initiative to learn and use
+							- no need to mark with `async` and `await`
+							- the APIs could be run within thread context
+							- the APIs are compatible with std and stable
+						* The Bad
+						    - consume more memory
+							- context switching is not free
+							- more easily stack overflow
+						Note: you should tune the stack usage of the application
+						      there are tools to show the stack usage
+						```
+					</script>
+				</section>
+			</section>
+
+			<section
+				data-background-iframe="https://www.techempower.com/benchmarks/#section=data-r17&hw=cl&test=plaintext">
+				<div
+					style="position: absolute; width: 40%; right: 0; box-shadow: 0 1px 4px rgba(0,0,0,0.5), 0 5px 25px rgba(0,0,0,0.2); background-color: rgba(0, 0, 0, 0.9); color: #fff; padding: 20px; font-size: 20px; text-align: left;">
+					<p> CONCLUSION </p>
+					<p> - uniform generator and coroutine </p>
+					<p> - uniform thread and coroutine </p>
+					<p> - uniform linux/bsd/windows </p>
+					<p> - compatible API with std library </p>
+					<p> - intuitive usage and high performance </p>
+				</div>
+			</section>
+
+			<section style="text-align: center;">
 				<h1>Thanks</h1>
-				<p>
-					- <a href="https://https://github.com/Xudong-Huang/generator-rs">stackful generator</a> <br>
-					- <a href="https://github.com/Xudong-Huang/MAY">MAY</a>
+				<p style="text-align: left;">
+					- <a href="https://https://github.com/Xudong-Huang/generator-rs">generator-rs</a> <br>
+					- <a href="https://github.com/Xudong-Huang/May">May</a>
 				</p>
 			</section>
 
