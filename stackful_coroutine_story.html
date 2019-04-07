@@ -50,13 +50,6 @@
 
 			<section data-markdown>
 				<script type="text/template">
-					- Item 1 <!-- .element: class="fragment" data-fragment-index="2" -->
-					- Item 2 <!-- .element: class="fragment" data-fragment-index="1" -->
-				</script>
-			</section>
-
-			<section data-markdown>
-				<script type="text/template">
 							## Agenda
 							* Stackful Generator
 							* Stackful Coroutine
@@ -64,11 +57,59 @@
 							* Async Io
 							* Sync Primitives
 							* Timer Management
+				</script>
+			</section>
+
+			<section data-markdown>
+				<script type="text/template">
+							## Agenda - continued
 							* Coroutine Cancellation
 							* Deal with contentions
+							* join! and select!
 							* Result and performance
 							* Difference with Futures
 				</script>
+			</section>
+
+			<section>
+				<section data-markdown>
+					<script type="text/template">
+								## Stackful Generator
+								
+								* generator is a special function with multiple return values
+								* `send`/`yeild` would swich stack context 
+					
+								    ```rust
+									let mut g = Gn::new_scoped(|mut s| {
+										s.yield_(17); //--> `yield` switch stack to caller
+										              //--> `send` switch stack back from caller
+										return 42;    //--> `return` finish the generator
+										              //    and switch stack back to caller
+									});
+									g.for_each(|v| println!("{}", v); // print 17 and 42
+									```
+								Notes:
+								compared with stack frame in normal funciton calls
+					</script>
+				</section>
+				<section data-markdown>
+					<script type="text/template">
+							## Context managment
+							* thread local context stack and chain generators
+							<div style="text-align: center;"><img src="images/context_stack_gen.png" style="background:none; border:none; box-shadow:none;"></div>
+							Note: the root contains no stack but only regs
+					</script>
+				</section>
+
+				<section data-markdown>
+					<script type="text/template">
+							## key features
+							* detect current context type
+							* `send` and `yield` with parameters
+							* yield internal stack refs
+							* always yiled to caller
+					</script>
+				</section>
 			</section>
 
 			<!-- Example of nested vertical slides -->
