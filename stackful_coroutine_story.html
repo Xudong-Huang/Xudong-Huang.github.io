@@ -50,64 +50,115 @@
 
 			<section data-markdown>
 				<script type="text/template">
-							## Agenda
-							* Stackful Generator
-							* Stackful Coroutine
-							* User/Kernel module
-							* Async Io
-							* Sync Primitives
-							* Timer Management
+					## Agenda
+					* Stackful Generator
+					* Stackful Coroutine
+					* Async Io
+					* Sync Primitives
+					* Timer Management
 				</script>
 			</section>
 
 			<section data-markdown>
 				<script type="text/template">
-							## Agenda - continued
-							* Coroutine Cancellation
-							* Deal with contentions
-							* join! and select!
-							* Result and performance
-							* Difference with Futures
+					## Agenda - continued
+					* Coroutine Cancellation
+					* Deal with contentions
+					* join! and select!
+					* Result and performance
+					* Difference with Futures
 				</script>
 			</section>
 
 			<section>
 				<section data-markdown>
 					<script type="text/template">
-								## Stackful Generator
-								
-								* generator is a special function with multiple return values
-								* `send`/`yeild` would swich stack context 
-					
-								    ```rust
-									let mut g = Gn::new_scoped(|mut s| {
-										s.yield_(17); //--> `yield` switch stack to caller
-										              //--> `send` switch stack back from caller
-										return 42;    //--> `return` finish the generator
-										              //    and switch stack back to caller
-									});
-									g.for_each(|v| println!("{}", v); // print 17 and 42
-									```
-								Notes:
-								compared with stack frame in normal funciton calls
+						## Stackful Generator
+						
+						* generator is a special function with multiple return values
+						* `send`/`yeild` would swich stack context 
+							```rust
+							let mut g = Gn::new_scoped(|mut s| {
+								s.yield_(17); //--> `yield` switch stack to caller
+								              //--> `send` switch stack back from caller
+								return 42;    //--> `return` finish the generator
+								              //    and switch stack back to caller
+							});
+							g.for_each(|v| println!("{}", v); // print 17 and 42
+							```
+						Notes:
+						compared with stack frame in normal funciton calls
 					</script>
 				</section>
 				<section data-markdown>
 					<script type="text/template">
-							## Context managment
-							* thread local context stack and chain generators
-							<div style="text-align: center;"><img src="images/context_stack_gen.png" style="background:none; border:none; box-shadow:none;"></div>
-							Note: the root contains no stack but only regs
+						## Context managment
+						* thread local context stack and chain generators
+						<div style="text-align: center;"><img src="images/context_stack_gen.png" style="background:none; border:none; box-shadow:none;"></div>
+						Note: the root contains no stack but only regs
 					</script>
 				</section>
 
 				<section data-markdown>
 					<script type="text/template">
-							## key features
-							* detect current context type
-							* `send` and `yield` with parameters
-							* yield internal stack refs
-							* always yiled to caller
+						## key features
+						* detect current context type
+						* `send` and `yield` with parameters
+						* yield internal stack refs
+						* always yiled to caller
+					</script>
+				</section>
+			</section>
+
+			<section>
+				<section data-markdown>
+					<script type="text/template">
+						## Stackful Coroutine
+						* coroutine is a special thread (user space / light)
+						* scheduler running on multi-thread
+						* semantic blocking is not real blocking
+						* call API without directly yield
+						* keep the same interface as std library
+					</script>
+				</section>
+				<section data-markdown>
+					<script type="text/template">
+						## Difference with generator
+						* coroutine is a special generator
+						* stackful coroutine can yeild from any point directly to scheduler
+						* always yeild a "kernal request"
+						* when resume the scheduler send back the result
+						* init with Coroutine Local Storage
+
+					</script>
+				</section>
+
+				<section data-markdown>
+					<script type="text/template">
+						## user and kernel model
+						<div style="text-align: center;"><img src="images/coroutine_stack.png" style="background:none; border:none; box-shadow:none;"></div>
+					</script>
+				</section>
+
+				<section data-markdown>
+					<script type="text/template">
+						## uniform coroutine and generator
+						```rust
+						go!(|| {
+							let g = Gn::new_scoped(|mut s| {
+								for i in 0..1000 {
+									// call coroutine API in generator, yield to scheduler
+									coroutine::sleep(Duration::from_secs(1));
+									// yield to caller
+									s.yield_(i);
+								}
+								1000
+							});
+					
+							g.for_each(|v| { dbg!(v); });
+						})
+						.wait()
+						```
 					</script>
 				</section>
 			</section>
