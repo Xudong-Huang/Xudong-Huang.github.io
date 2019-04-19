@@ -76,6 +76,9 @@
 						## Stackful Generator
 						
 						* generator is a special function with multiple return values
+						```rust
+						pub type Generator<'a, A, T> = Box<GeneratorImpl<'a, A, T>>;
+						```
 						* `send`/`yield` would switch stack context 
 							```rust
 							let mut g = Gn::new_scoped(|mut s| {
@@ -84,7 +87,10 @@
 								return 42;    //--> `return` finish the generator
 								              //    and switch stack back to caller
 							});
-							g.for_each(|v| println!("{}", v); // print 17 and 42
+							assert_eq!(g.send(()), 17); // run the generator
+							assert_eq!(g.send(()), 42); // run the generator again
+							assert_eq!(g.is_done(), true); // the generator is done
+							// g.for_each(|v| println!("{}", v); // print 17 and 42
 							```
 						Notes:
 						compared with stack frame in normal function calls
