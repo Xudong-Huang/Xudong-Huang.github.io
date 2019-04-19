@@ -207,6 +207,13 @@
 				</section>
 			</section>
 
+			<section data-markdown>
+				<script type="text/template">
+						## system overview
+						<div style="text-align: center;"><img src="images/overview.png" style="background:none; border:none; box-shadow:none;"></div>
+					</script>
+			</section>
+
 			<section>
 				<section data-markdown>
 					<script type="text/template">
@@ -319,6 +326,31 @@
 							- make sure event processed once and only once between event consumer and producer
 					</script>
 				</section>
+				<section data-markdown>
+					<script type="text/template">
+						## Atomic event procecess
+						* the event producer in one thread
+						```rust
+						// register the coroutine handle to io sub system
+						io_data.co.swap(co, Ordering::Release);
+						// try to run the event process logic
+						if let Some(co) = io_data.co.take(Ordering::Acquire) {
+							// process the event in kernel
+							......
+							return co.resume(); }
+						```
+						* the event consumer loop in another thread
+						```rust
+						// try to consume the coroutine handle
+						while let Some(io_data) = event_selector.poll() {
+							if let Some(co) = io_data.co.take(Ordering::Acquire) {
+								// process the event in kernel
+								......
+								co.resume();
+							}}						
+						```
+					</script>
+				</section>
 			</section>
 
 			<section>
@@ -356,13 +388,6 @@
 						```
 					</script>
 				</section>
-			</section>
-
-			<section data-markdown>
-				<script type="text/template">
-						## system overview
-						<div style="text-align: center;"><img src="images/overview.png" style="background:none; border:none; box-shadow:none;"></div>
-					</script>
 			</section>
 
 			<section>
