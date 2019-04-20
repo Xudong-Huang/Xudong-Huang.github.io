@@ -292,7 +292,7 @@
 				<section data-markdown>
 					<script type="text/template">
 						## coroutine cancellation
-						* we trigger a special panic while detect cancel
+						* we trigger a special panic when detect cancel
 						* the cancel panic would be caught and we have chance to mark the coroutine as cancelled
 						* can only detect cancel when switch from/to kernel
 						* the cancel panic would trigger stack unwind and may has bad side effect
@@ -326,7 +326,7 @@
 						* user space and kernel space contention
 							- Delay drop kernel request until the kernel `subscribe()` done
 						* use lockless data structures
-							- AtomicOption - only one sub system can grab the coroutine
+							- AtomicOption - only one sub system can grab the coroutine handle
 							- atomic queues - Mutex/Semphore queue
 						* atomic event exchange algorithm
 							- make sure event processed once and only once between event consumer and producer
@@ -335,17 +335,8 @@
 				<section data-markdown>
 					<script type="text/template">
 						## Atomic event procecess
-						* the event producer in one thread
-						```rust
-						// register the coroutine handle to io sub system
-						io_data.co.swap(co, Ordering::Release);
-						// try to run the event process logic
-						if let Some(co) = io_data.co.take(Ordering::Acquire) {
-							// process the event in kernel
-							......
-							return co.resume(); }
-						```
-						* the event consumer loop in another thread
+						* the event consumer loop in a thread
+						
 						```rust
 						// try to consume the coroutine handle
 						while let Some(io_data) = event_selector.poll() {
@@ -354,6 +345,17 @@
 								......
 								co.resume();
 							}}						
+						```
+						* the event producer in another thread
+
+						```rust
+						// register the coroutine handle to io sub system
+						io_data.co.swap(co, Ordering::Release);
+						// try to run the event process logic
+						if let Some(co) = io_data.co.take(Ordering::Acquire) {
+							// process the event in kernel
+							......
+							return co.resume(); }
 						```
 					</script>
 				</section>
